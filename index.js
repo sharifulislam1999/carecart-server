@@ -331,7 +331,7 @@ async function run() {
         const result = await cartCollection.updateOne({_id:new ObjectId(linkQuery.id)},updatedDocs);
         res.send(result)       
       }
-    })
+    });
 
     app.patch('/payments/:id',async(req,res)=>{
       const id = req.params.id;
