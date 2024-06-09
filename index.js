@@ -344,7 +344,7 @@ async function run() {
       const result = await paymentCollection.updateOne({_id: new ObjectId(id)},updatedDoc);
       res.send(result);
 
-    })
+    });
 
 
 
