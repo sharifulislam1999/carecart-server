@@ -47,6 +47,26 @@ async function run() {
         next();
       });
     }
+    const verifyAdmin = async(req,res,next)=>{
+      const email = req.decoded.email;
+      const query = {email:email}
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if(!isAdmin){
+        return res.status(403).send({message:"Forbidden Access"})
+      }
+      next();
+    }
+    const verifySeller = async(req,res,next)=>{
+      const email = req.decoded.email;
+      const query = {email:email}
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "seller";
+      if(!isAdmin){
+        return res.status(403).send({message:"Forbidden Access"})
+      }
+      next();
+    }
     app.patch('/user/:id/:role',async(req,res)=>{
       const id = req.params.id;
       const role = req.params.role;
@@ -74,6 +94,17 @@ async function run() {
       const result = await bannerCollection.deleteOne(query);
       res.send(result);
     })
+    
+
+
+
+    // pagination
+    // app.get('/allmedicine')
+
+
+
+
+    // pagination
 
     app.patch('/banner/:id',async(req,res)=>{
       const id = req.params.id;
@@ -148,17 +179,14 @@ async function run() {
 
     })
 
-    // app.get('/getrole/:email',async(req,res)=>{
-    //   const email = req.params.email;
-    //   console.log('before',email)
-    //   const query = {email: email};
-    //   const user = await usersCollection.findOne(query);
-    //   console.log("user",user)
-    //   res.send({role:user.role});
-    // })
-
-
-
+    app.get('/getrole/:email',async(req,res)=>{
+      const email = req.params.email;
+      // console.log('before',email)
+      const query = {email: email};
+      const user = await usersCollection.findOne(query);
+      // console.log("user",user)
+      res.send({role:user.role});
+    });
     app.post('/medicine',async(req,res)=>{
       const medicine = req.body;
       const find = await medicineCollection.findOne({medicineName:medicine.medicineName})
@@ -179,9 +207,27 @@ async function run() {
       res.send(result);      
     })
     app.get('/allmedicine',async(req,res)=>{
-      const result = await medicineCollection.find().toArray();
+      const page = parseInt(req.query.page);
+      const size = parseInt(req.query.size);
+      const result = await medicineCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray()
       res.send(result)
     })
+    app.get('/categorypagination',async(req,res)=>{
+      console.log(req.url)
+      const category = req.query.category;
+      const size = parseInt(req.query.size)
+      const page = parseInt(req.query.page)
+      const result = await medicineCollection.find({medicineCategory:category})
+      .skip(page * size)
+      .limit(size)
+      .toArray();
+      res.send(result)
+      
+    })
+    
     app.post('/addrequest',async (req,res)=>{
       const data = req.body;
       console.log(data)
@@ -293,11 +339,12 @@ async function run() {
     // set payment
     app.post('/savepayment',async(req,res)=>{
       const payment = req.body;
-      const cartItem = payment.cartId.map(item => new ObjectId(item));
-      const deleteCart = {_id:{$in:cartItem}}
-      const deleteResult = await cartCollection.deleteMany(deleteCart);
-      const result = await paymentCollection.insertOne(payment)
-      res.send({clearCart:deleteResult,payment:result});
+      const InsertPayment = await paymentCollection.insertMany(payment)      
+      const cartId = payment.map(item => new ObjectId(item._id));
+      const cartDelete = {_id:{$in:cartId}}
+      const clearCart = await cartCollection.deleteMany(cartDelete)      
+      // res.send({payment:InsertPayment,cart:clearCart})
+      res.send({payment:InsertPayment,cart:clearCart});
     })
     app.delete('/cart/:id',async(req,res)=>{
       const id = req.params.id;
@@ -310,6 +357,12 @@ async function run() {
       const  result = await paymentCollection.find().toArray();
       res.send(result);
     })
+    app.get('/sellerpayment/:email', async(req,res)=>{
+      const email = req.params.email;
+      const payments = await paymentCollection.find({seller:email}).toArray();
+      res.send(payments)
+  });
+  
     app.patch('/cart',async(req,res)=>{      
       const linkQuery = req.query;
       if(linkQuery.dep === "i"){
@@ -331,20 +384,101 @@ async function run() {
         const result = await cartCollection.updateOne({_id:new ObjectId(linkQuery.id)},updatedDocs);
         res.send(result)       
       }
-    });
+    });  
+    // app.get('/payments/:id',async(req,res)=>{
+    //   const id = req.params.id;
+    //   const result = await paymentCollection.findOne({_id:new ObjectId(id)});
+    //   res.send(result);
+    // })
 
     app.patch('/payments/:id',async(req,res)=>{
+      // console.log(req.params.id)
       const id = req.params.id;
-      const data = req.body;
+      const filter = {_id:new ObjectId(id)}
+
       const updatedDoc = {
         $set:{
-          status: data.status
+          status: 'paid'
         }
       }
-      const result = await paymentCollection.updateOne({_id: new ObjectId(id)},updatedDoc);
+      const result = await paymentCollection.updateOne(filter,updatedDoc)
       res.send(result);
 
     });
+
+    app.get("/salesreport",async(req,res)=>{
+      if(req.query.start && req.query.endDate){
+        console.log(req.query.start,req.query.endDate)
+        const result = await paymentCollection.find({
+          date:{
+            $gte: new Date(req.query.start),
+            $lt: new Date(req.query.endDate)
+          }
+        }).toArray();
+        // console.log(req.query)
+      return res.send(result)
+      }else{
+        const result = await paymentCollection.find().toArray();
+        return res.send(result)
+      }
+    })
+
+
+    // admin stack
+    app.get('/adminstacks',async(req,res)=>{
+      const totalRes = await paymentCollection.find().toArray();
+      const totalUnpaidRes = await paymentCollection.find({status:'paid'}).toArray();
+      const totalPaidRes = await paymentCollection.find({status:'pending'}).toArray();
+      const totalSales = totalRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      const totalPaid = totalUnpaidRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      const totalUnPaid = totalPaidRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      res.send({totalSales,totalPaid,totalUnPaid})
+    })
+    app.get('/sellerstack/:email',async(req,res)=>{
+      const email = req.params.email;
+      const totalRes = await paymentCollection.find({seller:email}).toArray();
+      const totalUnpaidRes = await paymentCollection.find({seller:email,status:'paid'}).toArray();
+      const totalPaidRes = await paymentCollection.find({serller:email,status:'pending'}).toArray();
+      const totalSales = totalRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      const totalPaid = totalUnpaidRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      const totalUnPaid = totalPaidRes.reduce((a,i)=>  parseInt(i.price) + a,0);
+      res.send({totalSales,totalPaid,totalUnPaid})
+    })
+    app.get('/sellerpayment',async(req,res)=>{
+      const result = await paymentCollection.aggregate([
+        {
+            $unwind:'$menuId'
+        },
+        {
+          $addFields: {
+            menuId: { $toObjectId: "$menuId" }
+          }
+        },
+        {
+          $lookup:{
+            from: "medicine",
+            localField: 'menuId',
+            foreignField: "_id",
+            as: 'menuItems'
+          }
+        },
+        {
+          $unwind:'$menuItems'
+        },
+        {
+          $group:{
+            _id: '$menuItems'
+          }
+        }
+    
+    ]).toArray(); 
+    res.send(result)
+    })
+    app.get('/userpayment/:email',async(req,res)=>{
+      const email = req.params.email;
+      const find = await paymentCollection.find({user:email}).toArray();
+      res.send(find)
+    })
 
 
 
