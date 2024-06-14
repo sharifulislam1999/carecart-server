@@ -392,18 +392,13 @@ async function run() {
     // })
 
     app.patch('/payments/:id',async(req,res)=>{
-      // console.log(req.params.id)
-      const id = req.params.id;
-      const filter = {_id:new ObjectId(id)}
-
-      const updatedDoc = {
+      const updateDocs = {
         $set:{
-          status: 'paid'
+          status:req.body.status
         }
       }
-      const result = await paymentCollection.updateOne(filter,updatedDoc)
-      res.send(result);
-
+      const result = await paymentCollection.updateOne({_id: new ObjectId(req.params.id)},updateDocs)
+      res.send(result)
     });
 
     app.get("/salesreport",async(req,res)=>{
