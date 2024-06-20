@@ -5,7 +5,15 @@ const app = express();
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
 app.use(express.json());
-app.use(cors())
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://b9a12-73e3e.web.app",
+      "https://b9a12-73e3e.firebaseapp.com",
+    ]
+  })
+);
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -24,7 +32,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // all collection
     const usersCollection = client.db('medicalDatabase').collection("users");
     const categoryCollection = client.db('medicalDatabase').collection("category");
@@ -33,6 +41,7 @@ async function run() {
     const adsRequestCollection = client.db('medicalDatabase').collection("bannerrequest");
     const cartCollection = client.db('medicalDatabase').collection('cart')
     const paymentCollection = client.db('medicalDatabase').collection('payments')
+    const invoiceCollection = client.db('medicalDatabase').collection('invoice')
     // middle ware
     const verifyToken = (req,res,next)=>{
       if(!req.headers.authorization){
@@ -67,10 +76,15 @@ async function run() {
       }
       next();
     }
-    app.patch('/user/:id/:role',async(req,res)=>{
+    app.patch('/user/:id/:role',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
       const role = req.params.role;
-      console.log(id,role);
+      // console.log(id,role);
       const filter = {_id:new ObjectId(id)};
       const updatedDoc = {
         $set:{
@@ -80,17 +94,28 @@ async function run() {
       const result = await usersCollection.updateOne(filter,updatedDoc);
       res.send(result);    
     })
-    app.post('/banner',async(req,res)=>{
+    app.post('/banner',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const result = await bannerCollection.insertOne(req.body);
       res.send(result)
     })
-    app.get('/banner', async(req,res)=>{
+    app.get('/banner',async(req,res)=>{
+  
       const result = await bannerCollection.find().toArray();
       res.send(result)
     })
-    app.delete('/banner/:id',async(req,res)=>{
+    app.delete('/banner/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = {_id: id};
       const result = await bannerCollection.deleteOne(query);
       res.send(result);
     })
@@ -106,11 +131,16 @@ async function run() {
 
     // pagination
 
-    app.patch('/banner/:id',async(req,res)=>{
+    app.patch('/banner/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
-      const filter = {_id: new ObjectId(id)};
+      const filter = {_id: id};
       const data = req.body;
-      console.log(id,data);
+      // console.log(id,data);
       const updatedData = {
         $set:{          
             medicineName:data.medicineName,
@@ -129,7 +159,12 @@ async function run() {
       res.send(result)
 
     })
-    app.post('/category',async(req,res)=>{
+    app.post('/category',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const category = req.body;
       const find = await categoryCollection.findOne({categoryName:category.categoryName});
       if(find){
@@ -151,19 +186,34 @@ async function run() {
 
 
     })
-    app.delete('/user/:id',async(req,res)=>{
+    app.delete('/user/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await usersCollection.deleteOne(query)
       res.send(result);
     })
-    app.delete('/category/:id',async(req,res)=>{
+    app.delete('/category/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await categoryCollection.deleteOne(query)
       res.send(result);
     })
-    app.patch('/category/:id',async(req,res)=>{
+    app.patch('/category/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const id = req.params.id;
       const getData = req.body;
       const fileter = {_id: new ObjectId(id)};
@@ -185,7 +235,12 @@ async function run() {
       const query = {email: email};
       const user = await usersCollection.findOne(query);
       // console.log("user",user)
-      res.send({role:user.role});
+      let role = "dsf";
+      if(user){
+        role = user?.role;
+      }
+      // console.log(user,email)
+      res.send({role:role});
     });
     app.post('/medicine',async(req,res)=>{
       const medicine = req.body;
@@ -207,20 +262,43 @@ async function run() {
       res.send(result);      
     })
     app.get('/allmedicine',async(req,res)=>{
+      // console.log(req.query);
+      const sort = req.query.sort;
+      const search = req.query.search || "";
       const page = parseInt(req.query.page);
       const size = parseInt(req.query.size);
-      const result = await medicineCollection.find()
+      const query = {        
+          $or:[
+            {medicineName:{$regex:search,$options:"i"}},
+            {genericName:{$regex:search,$options:"i"}},
+            {medicineCompany:{$regex:search,$options:"i"}}
+          ]
+        
+      }
+      const result = await medicineCollection.find(query).sort({medicinePrice: sort === 'high' ? 1:-1})
       .skip(page * size)
       .limit(size)
       .toArray()
       res.send(result)
     })
     app.get('/categorypagination',async(req,res)=>{
-      console.log(req.url)
+      const sort = req.query.sort;
+      const search = req.query.search || "";
+      const page = parseInt(req.query.page);
+      const size = parseInt(req.query.size);
       const category = req.query.category;
-      const size = parseInt(req.query.size)
-      const page = parseInt(req.query.page)
-      const result = await medicineCollection.find({medicineCategory:category})
+      const query = {   
+        medicineCategory:category,     
+        $or:[
+          {medicineName:{$regex:search,$options:"i"}},
+          {genericName:{$regex:search,$options:"i"}},
+          {medicineCompany:{$regex:search,$options:"i"}}
+        ]
+        
+      }
+      console.log(search,sort)
+      const result = await medicineCollection.find(query)
+      .sort({medicinePrice: sort === 'high' ? 1:-1})
       .skip(page * size)
       .limit(size)
       .toArray();
@@ -228,14 +306,19 @@ async function run() {
       
     })
     
-    app.post('/addrequest',async (req,res)=>{
+    app.post('/addrequest',verifyToken,async (req,res)=>{
       const data = req.body;
-      console.log(data)
+      // console.log(data)
       const result = await adsRequestCollection.insertOne(data);
       res.send(result);
     })
-    app.get('/bannerrequest',async (req,res)=>{
-      console.log("yes")
+    app.get('/bannerrequest',verifyToken,verifyAdmin,async (req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
+      // console.log("yes")
       const query = {status: {$eq:'pending'}}
       const result = await adsRequestCollection.find(query).toArray();
       res.send(result)
@@ -263,7 +346,7 @@ async function run() {
       const id = req.params.id;
       const filter = {_id: new ObjectId(id)};
       const data = req.body;
-      console.log(id,data);
+      // console.log(id,data);
       const updatedData = {
         $set:{          
             medicineName:data.medicineName,
@@ -291,7 +374,12 @@ async function run() {
       const result = await categoryCollection.find().toArray();
       res.send(result)
     })
-    app.get('/user',async(req,res)=>{
+    app.get('/user',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
@@ -304,7 +392,7 @@ async function run() {
 
 
     // cart api
-    app.post('/cart',async(req,res)=>{
+    app.post('/cart',verifyToken,async(req,res)=>{
       const cart = req.body;
       const find = await cartCollection.findOne({menuId: cart.menuId})
       if(find){
@@ -314,11 +402,10 @@ async function run() {
       res.send(result)      
     })
     
-    app.get('/cart',async (req,res)=>{
-      const query = res.query;
-      const result = await cartCollection.find(query).toArray();
-      res.send(result
-      )
+    app.get('/cart', async (req,res)=>{
+      const query = req.query;
+      const result = await cartCollection.find({user:query.email}).toArray();
+      res.send(result)
     })
 
 
@@ -346,24 +433,46 @@ async function run() {
       // res.send({payment:InsertPayment,cart:clearCart})
       res.send({payment:InsertPayment,cart:clearCart});
     })
-    app.delete('/cart/:id',async(req,res)=>{
+    app.delete('/cart/:id',verifyToken,async(req,res)=>{
       const id = req.params.id;
       const query = {_id: new ObjectId(id)}
       const result = await cartCollection.deleteOne(query);
       res.send(result)
 
     })
-    app.get('/payments',async(req,res)=>{
+    app.delete('/clearcart/:email',verifyToken,async(req,res)=>{
+      const email = req.params.email;
+      const query = {user: email}
+      const result = await cartCollection.deleteMany(query);
+      res.send(result)
+
+    })
+    app.get('/payments',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const  result = await paymentCollection.find().toArray();
+      res.send(result);
+    })
+    app.get('/adminpayments',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
+      const  result = await paymentCollection.find().sort({_id: -1}).toArray();
       res.send(result);
     })
     app.get('/sellerpayment/:email', async(req,res)=>{
       const email = req.params.email;
-      const payments = await paymentCollection.find({seller:email}).toArray();
+      const payments = await paymentCollection.find({seller:email}).sort({_id: -1}).toArray();
       res.send(payments)
   });
   
-    app.patch('/cart',async(req,res)=>{      
+  
+    app.patch('/cart',verifyToken,async(req,res)=>{      
       const linkQuery = req.query;
       if(linkQuery.dep === "i"){
         const find = await cartCollection.findOne({_id: new ObjectId(linkQuery.id)});
@@ -391,25 +500,45 @@ async function run() {
     //   res.send(result);
     // })
 
-    app.patch('/payments/:id',async(req,res)=>{
-      const updateDocs = {
+    app.patch('/payments/:id',verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
+      const id = req.params.id;
+      const filter = {transId: id};
+      const updatedDocs  = {
         $set:{
-          status:req.body.status
+          status: "paid"
         }
       }
-      const result = await paymentCollection.updateOne({_id: new ObjectId(req.params.id)},updateDocs)
-      res.send(result)
+      const result = await paymentCollection.updateMany(filter,updatedDocs)
+    // console.log()
+    res.send(result)
     });
 
-    app.get("/salesreport",async(req,res)=>{
+    app.get("/salesreport",verifyToken,verifyAdmin,async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       if(req.query.start && req.query.endDate){
-        console.log(req.query.start,req.query.endDate)
+        // console.log(req.query.start,req.query.endDate)
+        const convertToDate =  (dateString)=>{
+          const [day,month,year] = dateString.split('/').map(Number);
+          return new Date(year,month-1,day)
+        }
+        // console.log(new Date(req.query.start))
+        // console.log(new Date(req.query.endDate))
         const result = await paymentCollection.find({
           date:{
             $gte: new Date(req.query.start),
-            $lt: new Date(req.query.endDate)
+            $lte: new Date(req.query.endDate)
           }
         }).toArray();
+
         // console.log(req.query)
       return res.send(result)
       }else{
@@ -420,7 +549,12 @@ async function run() {
 
 
     // admin stack
-    app.get('/adminstacks',async(req,res)=>{
+    app.get('/adminstacks', verifyToken,verifyAdmin, async(req,res)=>{
+      const email = req.decoded.email;
+      const rule = await usersCollection.findOne({email:email})
+      if(rule.role !== 'admin'){
+        return res.status(403).send({message:'forbidden access'})
+      }
       const totalRes = await paymentCollection.find().toArray();
       const totalUnpaidRes = await paymentCollection.find({status:'paid'}).toArray();
       const totalPaidRes = await paymentCollection.find({status:'pending'}).toArray();
@@ -469,12 +603,24 @@ async function run() {
     ]).toArray(); 
     res.send(result)
     })
-    app.get('/userpayment/:email',async(req,res)=>{
+    app.get('/userpayment/:email',verifyToken,async(req,res)=>{
       const email = req.params.email;
-      const find = await paymentCollection.find({user:email}).toArray();
+      const find = await paymentCollection.find({user:email}).sort({_id:-1}).toArray();
       res.send(find)
     })
 
+
+
+    app.post('/invoice',async (req,res)=>{
+      const data = req.body;
+      const result = await invoiceCollection.insertOne(data)
+      res.send(result)
+    })
+    app.get('/invoice/:id',async (req,res)=>{
+      const find = {_id:new ObjectId(req.params.id)}
+      const result = await invoiceCollection.findOne(find)
+      res.send(result)
+    })
 
 
     // Send a ping to confirm a successful connection
@@ -486,11 +632,11 @@ async function run() {
       }
       const result = await usersCollection.insertOne(user)
       res.send(result)
-      console.log('body',user)
+      // console.log('body',user)
     })
    
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close()f;
