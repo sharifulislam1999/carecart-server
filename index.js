@@ -576,8 +576,6 @@ async function run() {
         return res.send(result)
       }
     })
-
-
     // admin stack
     app.get('/adminstacks', verifyToken,verifyAdmin, async(req,res)=>{
       const email = req.decoded.email;
